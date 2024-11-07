@@ -5,7 +5,7 @@ import logging
 
 def get_sftp_creds():
     config = configparser.ConfigParser()
-    config.read("config/config.ini")
+    config.read("/sftp_to_s3/config/config.ini") 
 
     sftp_creds = {
         "sftp_host": config["SFTP"]["SFTP_HOST"],

@@ -15,7 +15,7 @@ class SftpHandler(pysftp.Connection):
             port=port,
             cnopts=cnopts
         )
-        logging.info("Connection successful")
+        logging.info("Connection to sftp server successful")
         self.path = path
         
 

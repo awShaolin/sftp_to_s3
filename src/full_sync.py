@@ -5,11 +5,11 @@ from libs.s3_handler import S3Handler
 from libs.sftp_handler import SftpHandler
 from utils.helper_utils import get_sftp_creds, clean_local_dwnld_dir
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 #local
-PATH_TO_OLD_META = "/Users/aero/Documents/HOFF/testing_stuff/sftp_to_s3/test.json"
-LOCAL_DWNLD_DIR = "/Users/aero/Documents/HOFF/testing_stuff/sftp_to_s3/tmp_files"
+PATH_TO_OLD_META = "/sftp_to_s3/tmp/sftp_meta.json"
+LOCAL_DWNLD_DIR = "/sftp_to_s3/tmp/local_data"
 #sftp
 # SFTP_FOLDER_NAME = "upload"
 SFTP_FOLDER_NAME = "upload/axapta/client_registration/2024"
@@ -34,6 +34,7 @@ def compare_sftp_s3_meta(sftp_meta, s3_meta):
     return files_to_upload
 
 if __name__ == "__main__":
+    logging.info("STARTING FULL SYNC PROCCESS")
     #get sftp meta
     sftp_creds = get_sftp_creds()
 
