@@ -24,10 +24,13 @@ def get_old_sftp_meta(path):
     try:
         with open(path, "r") as f:
             old_sftp_meta = json.load(f)
-            logging.info("Load old sftp metadata to old_sftp_meta.")
+            logging.info("Load old SFTP metadata to old_sftp_meta.")
         return old_sftp_meta
     except FileNotFoundError:
-        logging.error(f"Old metadata file not found at {path}.")
+        logging.error(f"Old metadata file not found at {path}. Returning empty metadata.")
+        return {}
+    except json.JSONDecodeError:
+        logging.error(f"Metadata file at {path} is empty or contains invalid JSON. Returning empty metadata.")
         return {}
 
 

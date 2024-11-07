@@ -65,6 +65,11 @@ if __name__ == "__main__":
 
     if not files_to_upload:
         logging.info("No files to upload to s3.")
+
+        with open(PATH_TO_OLD_META, "w") as f:
+            json.dump(sftp_meta, f)
+        logging.info("Update sftp meta in local.")
+
         sftp.close()
         logging.info("Close connection to sftp")
         logging.info("Exiting...")
