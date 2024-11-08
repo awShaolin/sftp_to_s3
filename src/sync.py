@@ -3,21 +3,13 @@ import json
 import sys
 from libs.sftp_handler import SftpHandler
 from libs.s3_handler import S3Handler
-from utils.helper_utils import get_sftp_creds, clean_local_dwnld_dir
+from utils.helper_utils import get_sftp_creds, get_s3_creds, clean_local_dwnld_dir
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 #local
 PATH_TO_OLD_META = "/sftp_to_s3/tmp/sftp_meta.json"
 LOCAL_DWNLD_DIR = "/sftp_to_s3/tmp/local_data"
-#sftp
-# SFTP_FOLDER_NAME = "upload"
-SFTP_FOLDER_NAME = "upload/axapta/client_registration/2024"
-#s3
-S3_BUCKET_NAME = "mtest"
-S3_FOLDER_NAME = "history/"
-S3_SERVICE = 's3'
-S3_ENDPOINT = 'https://storage.yandexcloud.net'
 
 
 def get_old_sftp_meta(path):
@@ -64,7 +56,7 @@ if __name__ == "__main__":
         port=sftp_creds["sftp_port"],
         user=sftp_creds["sftp_user"],
         password=sftp_creds["sftp_pass"],
-        path=SFTP_FOLDER_NAME
+        path=sftp_creds["sftp_folder_name"]
     )
 
     new_sftp_meta = sftp.get_meta()
@@ -85,11 +77,16 @@ if __name__ == "__main__":
     sftp.close()
     
     #load files from local to s3
+    s3_creds = get_s3_creds()
+
     s3 = S3Handler(
-        bucket=S3_BUCKET_NAME,
-        folder=S3_FOLDER_NAME,
-        service_name=S3_SERVICE,
-        endpoint_url=S3_ENDPOINT 
+        bucket=s3_creds["s3_bucket_name"],
+        folder=s3_creds["s3_folder_name"],
+        service_name=s3_creds["s3_service"],
+        endpoint_url=s3_creds["s3_endpoint"], 
+        s3_region=s3_creds["s3_region"],
+        s3_access_key_id=s3_creds["s3_access_key_id"],
+        s3_secret_access_key=s3_creds["s3_secret_access_key"]
     )
     s3.local_to_s3(files_to_upload, LOCAL_DWNLD_DIR)
 

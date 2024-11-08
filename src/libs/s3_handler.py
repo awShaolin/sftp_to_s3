@@ -5,7 +5,10 @@ import boto3.session
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError
 
 class S3Handler:
-    def __init__(self, bucket, folder, service_name, endpoint_url):
+    def __init__(self, bucket, folder, service_name, endpoint_url, s3_access_key_id, s3_secret_access_key, s3_region):
+        self.s3_access_key_id = s3_access_key_id
+        self.s3_secret_access_key = s3_secret_access_key
+        self.s3_region = s3_region
         self.service_name=service_name
         self.endpoint_url=endpoint_url
         self.bucket = bucket
@@ -13,7 +16,11 @@ class S3Handler:
         self.s3 = self.get_conn()
 
     def get_conn(self):
-        session = boto3.session.Session()
+        session = boto3.session.Session(
+                aws_access_key_id=self.s3_access_key_id,
+                aws_secret_access_key=self.s3_secret_access_key,
+                region_name=self.s3_region
+            )
         try:
             self.s3 = session.client(
                 service_name=self.service_name,
