@@ -1,6 +1,7 @@
 import logging
 import json
 import sys
+import io
 from libs.sftp_handler import SftpHandler
 from libs.s3_handler import S3Handler
 from utils.helper_utils import get_sftp_creds, get_s3_creds, clean_local_dwnld_dir
@@ -38,6 +39,44 @@ def compare_sftp_meta(new_sftp_meta, old_sftp_meta):
     logging.info(f"Files to upload: {files_to_upload}")
     return files_to_upload
 
+def sftp_to_s3(files_to_upload, sftp, s3, bucket):
+    failed_files = []  
+
+    for sftp_path in files_to_upload:
+        s3_path = sftp_path.replace('upload/', 'history/')
+        logging.info(f"Uploading file {sftp_path} to S3 as {s3_path}")
+
+        try:
+            with io.BytesIO() as file_stream:
+                try:
+                    sftp.getfo(sftp_path, file_stream)
+                except Exception as e:
+                    logging.error(f"Failed to download file {sftp_path} from SFTP: {e}")
+                    failed_files.append(sftp_path) 
+                    continue  
+
+                file_stream.seek(0)
+
+                try:
+                    s3.upload_fileobj(file_stream, bucket, s3_path)
+                    logging.info(f"File {sftp_path} successfully uploaded to S3 as {s3_path}")
+                except Exception as e:
+                    logging.error(f"Failed to upload file {s3_path} to S3: {e}")
+                    failed_files.append(sftp_path)
+                    continue
+
+        except Exception as e:
+            logging.error(f"Unexpected error occurred while processing file {sftp_path}: {e}")
+            failed_files.append(sftp_path)
+            continue 
+
+    if failed_files:
+        logging.error(f"Failed to upload the following files: {', '.join(failed_files)}")
+    else:
+        logging.info("All files uploaded successfully.")
+
+    
+
 
 if __name__ == "__main__":
     logging.info("STARTING SYNC PROCCESS")
@@ -48,9 +87,8 @@ if __name__ == "__main__":
         logging.error("Old metadata is missing or empty. Stopping execution.")
         sys.exit(1)
 
-    #get new sftp meta
+    #get sftp connection
     sftp_creds = get_sftp_creds()
-
     sftp = SftpHandler(
         host=sftp_creds["sftp_host"],
         port=sftp_creds["sftp_port"],
@@ -59,6 +97,7 @@ if __name__ == "__main__":
         path=sftp_creds["sftp_folder_name"]
     )
 
+    #get new meta from sftp
     new_sftp_meta = sftp.get_meta()
     
     #get files to upload to s3
@@ -71,14 +110,9 @@ if __name__ == "__main__":
         logging.info("Close connection to sftp")
         logging.info("Exiting...")
         sys.exit(0)
-
-    #load files from sftp to local
-    sftp.sftp_to_local(files_to_upload, LOCAL_DWNLD_DIR)
-    sftp.close()
     
-    #load files from local to s3
+    #get s3 connection
     s3_creds = get_s3_creds()
-
     s3 = S3Handler(
         bucket=s3_creds["s3_bucket_name"],
         folder=s3_creds["s3_folder_name"],
@@ -88,9 +122,10 @@ if __name__ == "__main__":
         s3_access_key_id=s3_creds["s3_access_key_id"],
         s3_secret_access_key=s3_creds["s3_secret_access_key"]
     )
-    s3.local_to_s3(files_to_upload, LOCAL_DWNLD_DIR)
 
-    clean_local_dwnld_dir(LOCAL_DWNLD_DIR)
+    #load data from sftp to s3
+    sftp_to_s3(files_to_upload, sftp, s3, s3_creds["s3_bucket_name"])
+
 
     #remember new meta
     with open(PATH_TO_OLD_META, "w") as f:

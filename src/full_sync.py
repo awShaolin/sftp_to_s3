@@ -2,6 +2,7 @@ import logging
 import json
 import sys
 import os
+import io
 from libs.s3_handler import S3Handler
 from libs.sftp_handler import SftpHandler
 from utils.helper_utils import get_sftp_creds, get_s3_creds, clean_local_dwnld_dir
@@ -10,7 +11,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 #local
 PATH_TO_OLD_META = "/sftp_to_s3/tmp/sftp_meta.json"
-LOCAL_DWNLD_DIR = "/sftp_to_s3/tmp/local_data"
 
 
 def compare_sftp_s3_meta(sftp_meta, s3_meta):
@@ -26,6 +26,43 @@ def compare_sftp_s3_meta(sftp_meta, s3_meta):
                 sftp_attrs['last_mod'] > int(s3_attrs['last_mod'])):
                 files_to_upload.append(sftp_path)
     return files_to_upload
+
+def sftp_to_s3(files_to_upload, sftp, s3, bucket):
+    failed_files = []  
+
+    for sftp_path in files_to_upload:
+        s3_path = sftp_path.replace('upload/', 'history/')
+        logging.info(f"Uploading file {sftp_path} to S3 as {s3_path}")
+
+        try:
+            with io.BytesIO() as file_stream:
+                try:
+                    sftp.getfo(sftp_path, file_stream)
+                except Exception as e:
+                    logging.error(f"Failed to download file {sftp_path} from SFTP: {e}")
+                    failed_files.append(sftp_path) 
+                    continue  
+
+                file_stream.seek(0)
+
+                try:
+                    s3.upload_fileobj(file_stream, bucket, s3_path)
+                    logging.info(f"File {sftp_path} successfully uploaded to S3 as {s3_path}")
+                except Exception as e:
+                    logging.error(f"Failed to upload file {s3_path} to S3: {e}")
+                    failed_files.append(sftp_path)
+                    continue
+
+        except Exception as e:
+            logging.error(f"Unexpected error occurred while processing file {sftp_path}: {e}")
+            failed_files.append(sftp_path)
+            continue 
+
+    if failed_files:
+        logging.error(f"Failed to upload the following files: {', '.join(failed_files)}")
+    else:
+        logging.info("All files uploaded successfully.")
+
 
 if __name__ == "__main__":
     logging.info("STARTING FULL SYNC PROCCESS")
@@ -76,14 +113,12 @@ if __name__ == "__main__":
         logging.info("Exiting...")
         sys.exit(0)
 
-    #load files from sftp to local
-    sftp.sftp_to_local(files_to_upload, LOCAL_DWNLD_DIR)
+    #load data from sftp to s3
+    sftp_to_s3(files_to_upload, sftp, s3, s3_creds["s3_bucket_name"])
+
+    #close sftp connection
     sftp.close()
-
-    #load files from local to s3
-    s3.local_to_s3(files_to_upload, LOCAL_DWNLD_DIR)
-
-    clean_local_dwnld_dir(LOCAL_DWNLD_DIR)
+    logging.info("Close connection to sftp")
 
     #remember sftp meta
     with open(PATH_TO_OLD_META, "w") as f:
