@@ -16,6 +16,9 @@ class S3Handler:
         self.s3 = self.get_conn()
 
     def get_conn(self):
+        """
+        Get connection to s3
+        """
         session = boto3.session.Session(
                 aws_access_key_id=self.s3_access_key_id,
                 aws_secret_access_key=self.s3_secret_access_key,
@@ -27,21 +30,24 @@ class S3Handler:
                 endpoint_url=self.endpoint_url
             )
             response = self.s3.list_buckets()
-            logging.info(f"Connection successful to {self.endpoint_url}, available buckets: {response['Buckets']}")
+            logging.info(f">>> Connection successful to {self.endpoint_url}, available buckets: {response['Buckets']}")
         except NoCredentialsError:
-            logging.error("No credentials found. Ensure your S3 credentials are configured in ~/.aws/credentials.")
+            logging.error(">>> No credentials found. Ensure your S3 credentials are configured in ~/.aws/credentials or they defined in env.")
             raise
         except PartialCredentialsError:
-            logging.error("Incomplete credentials found. Check your S3 configuration.")
+            logging.error(">>> Incomplete credentials found. Check your S3 configuration.")
             raise
         except Exception as e:
-            logging.error(f"An error occurred while connecting: {e}")
+            logging.error(f">>> An error occurred while connecting: {e}")
             raise
         
         return self.s3
     
 
     def get_meta(self):
+        """
+        Get s3 files meta
+        """
         s3_meta = {}
         try:
             paginator = self.s3.get_paginator('list_objects_v2')
@@ -58,26 +64,21 @@ class S3Handler:
                                 "last_mod": last_mod_unix
                             }
         except Exception as e:
-            logging.error(f"Error while retrieving metadata from s3: {e}")
+            logging.error(f">>> Error while retrieving metadata from s3: {e}")
 
         return s3_meta
     
 
-    def local_to_s3(self, files_to_upload, local_dwnld_dir):
-        if not files_to_upload:
-            logging.info("Nothing to upload, files_to_upload list is empty.")
-            return 
-        
-        for path in files_to_upload:
-            local_file_path = os.path.join(local_dwnld_dir, os.path.basename(path))
-
-            try: 
-                s3_path = path.replace('upload/', 'history/')
-                logging.info(f"Starting upload from local: {local_file_path} to s3: {s3_path}")
-                self.upload_file(local_file_path, self.bucket, s3_path)
-                logging.info(f"Uploaded {path} to {s3_path}")
-            except Exception as e:
-                logging.error(f"Failed to upload {path}: {e}")
+    def local_to_s3(self, local_file_path, s3_path):
+        """
+        Load data from local dir to s3
+        """
+        try: 
+            logging.info(f">>> Starting to upload {local_file_path} to S3 ...")
+            self.s3.upload_file(local_file_path, self.bucket, s3_path)
+            logging.info(f">>> Uploaded {local_file_path} to S3 as {s3_path}")
+        except Exception as e:
+            logging.error(f">>> Failed to upload {local_file_path} to S3: {e}")
     
     def __getattr__(self, name):
         return getattr(self.s3, name)

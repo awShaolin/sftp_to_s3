@@ -11,9 +11,12 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 #local
 PATH_TO_OLD_META = "/sftp_to_s3/tmp/sftp_meta.json"
-
+LOCAL_DWNLD_DIR = "/sftp_to_s3/tmp/local_data"
 
 def compare_sftp_s3_meta(sftp_meta, s3_meta):
+    """
+    Compare meta of files in sftp and s3 and returns list of files to upload to s3
+    """
     files_to_upload = []
 
     for sftp_path, sftp_attrs in sftp_meta.items():
@@ -27,49 +30,72 @@ def compare_sftp_s3_meta(sftp_meta, s3_meta):
                 files_to_upload.append(sftp_path)
     return files_to_upload
 
-def sftp_to_s3(files_to_upload, sftp, s3, bucket):
-    failed_files = []  
+def sftp_to_s3(s3, sftp, files_to_upload, local_dwnld_dir):
+    """
+    Load files from sftp to s3 frougth local dir
+    """
+    if not files_to_upload:
+        logging.info(">>> Nothing to upload, files_to_upload list is empty.")
+        return 
 
-    for sftp_path in files_to_upload:
-        s3_path = sftp_path.replace('upload/', 'history/')
-        logging.info(f"Uploading file {sftp_path} to S3 as {s3_path}")
+    if not os.path.exists(local_dwnld_dir):
+        os.makedirs(local_dwnld_dir)
+        logging.info(f">>> Created local directory: {local_dwnld_dir}")
+
+    for path in files_to_upload:
+        local_file_path = os.path.join(local_dwnld_dir, os.path.basename(path))
+        try:
+            sftp.sftp_to_local(path, local_file_path)
+        except:
+            continue
+
+        s3_path = path.replace('upload/', 'history/', 1)
+        try:
+            s3.local_to_s3(local_file_path, s3_path)
+        except:
+            continue
 
         try:
-            with io.BytesIO() as file_stream:
-                try:
-                    sftp.getfo(sftp_path, file_stream)
-                except Exception as e:
-                    logging.error(f"Failed to download file {sftp_path} from SFTP: {e}")
-                    failed_files.append(sftp_path) 
-                    continue  
-
-                file_stream.seek(0)
-
-                try:
-                    s3.upload_fileobj(file_stream, bucket, s3_path)
-                    logging.info(f"File {sftp_path} successfully uploaded to S3 as {s3_path}")
-                except Exception as e:
-                    logging.error(f"Failed to upload file {s3_path} to S3: {e}")
-                    failed_files.append(sftp_path)
-                    continue
-
+            os.remove(local_file_path)
+            logging.info(f">>> Deleted local file {local_file_path} after upload to S3")
         except Exception as e:
-            logging.error(f"Unexpected error occurred while processing file {sftp_path}: {e}")
-            failed_files.append(sftp_path)
-            continue 
+            logging.error(f">>> Failed to delete local file {local_file_path}: {e}")
 
-    if failed_files:
-        logging.error(f"Failed to upload the following files: {', '.join(failed_files)}")
-    else:
-        logging.info("All files uploaded successfully.")
+
+def sftp_to_s3_direct(s3, sftp, files_to_upload):
+    """
+    Directly upload files from SFTP to S3
+    """
+    if not files_to_upload:
+        logging.info(">>> Nothing to upload, files_to_upload list is empty.")
+        return 
+
+    for path in files_to_upload:
+        try:
+            with sftp.sftp.open(path, "rb") as sftp_file:
+                sftp_file.prefetch()
+                logging.info(">>>>>>>>>>>")
+                logging.info(f"{sftp_file}")
+
+                s3_path = path.replace('upload/', 'history/', 1)
+
+                s3.s3.put_object(
+                    Bucket=s3.bucket,
+                    Key=s3_path,
+                    Body=sftp_file
+                )
+                logging.info(f">>> Uploaded {path} to S3 as {s3_path}")
+        
+        except Exception as e:
+            logging.error(f">>> Failed to upload {path} to S3: {e}")
+            continue
 
 
 if __name__ == "__main__":
-    logging.info("STARTING FULL SYNC PROCCESS")
+    logging.info(">>>    STARTING FULL SYNC PROCCESS   <<<")
     
     #get sftp meta
     sftp_creds = get_sftp_creds()
-
     sftp = SftpHandler(
         host=sftp_creds["sftp_host"],
         port=sftp_creds["sftp_port"],
@@ -77,14 +103,11 @@ if __name__ == "__main__":
         password=sftp_creds["sftp_pass"],
         path=sftp_creds["sftp_folder_name"]
     )
-
     sftp_meta = sftp.get_meta()
-    logging.info(f"sftp_meta: {sftp_meta}")
+    logging.info(f">>> sftp_meta: {sftp_meta}")
 
     #get s3 meta
-
     s3_creds = get_s3_creds()
-
     s3 = S3Handler(
         bucket=s3_creds["s3_bucket_name"],
         folder=s3_creds["s3_folder_name"],
@@ -95,32 +118,32 @@ if __name__ == "__main__":
         s3_secret_access_key=s3_creds["s3_secret_access_key"]
     )
     s3_meta = s3.get_meta()
-    logging.info(f"s3_meta: {s3_meta}")
+    logging.info(f">>> s3_meta: {s3_meta}")
 
     #get files to upload to s3
     files_to_upload = compare_sftp_s3_meta(sftp_meta, s3_meta)
-    logging.info(f"Preparing to upload {len(files_to_upload)} files to s3.")
+    logging.info(f">>> Preparing to upload {len(files_to_upload)} files to s3.")
 
     if not files_to_upload:
-        logging.info("No files to upload to s3.")
+        logging.info(">>> No files to upload to s3.")
 
         with open(PATH_TO_OLD_META, "w") as f:
             json.dump(sftp_meta, f)
-        logging.info("Update sftp meta in local.")
+        logging.info(">>> Update sftp meta in local.")
 
-        sftp.close()
-        logging.info("Close connection to sftp")
-        logging.info("Exiting...")
+        sftp.close_conn()
+        logging.info(">>> Exiting...")
         sys.exit(0)
 
     #load data from sftp to s3
-    sftp_to_s3(files_to_upload, sftp, s3, s3_creds["s3_bucket_name"])
-
-    #close sftp connection
-    sftp.close()
-    logging.info("Close connection to sftp")
+    sftp_to_s3_direct(s3, sftp, files_to_upload)
+    logging.info(">>> Finish loading files from sftp to s3")
+    
+    sftp.close_conn()
+    
+    clean_local_dwnld_dir(LOCAL_DWNLD_DIR)
 
     #remember sftp meta
     with open(PATH_TO_OLD_META, "w") as f:
         json.dump(sftp_meta, f)
-    logging.info("Update sftp meta in local.")
+    logging.info(">>> Update sftp meta in local.")
