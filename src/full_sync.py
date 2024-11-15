@@ -44,6 +44,7 @@ def sftp_to_s3(s3, sftp, files_to_upload, local_dwnld_dir):
 
     for path in files_to_upload:
         local_file_path = os.path.join(local_dwnld_dir, os.path.basename(path))
+        logging.info(">>>>>>>>>>>")
         try:
             sftp.sftp_to_local(path, local_file_path)
         except:
@@ -136,7 +137,8 @@ if __name__ == "__main__":
         sys.exit(0)
 
     #load data from sftp to s3
-    sftp_to_s3_direct(s3, sftp, files_to_upload)
+    sftp_to_s3(s3, sftp, files_to_upload, LOCAL_DWNLD_DIR)
+    # sftp_to_s3_direct(s3, sftp, files_to_upload)
     logging.info(">>> Finish loading files from sftp to s3")
     
     sftp.close_conn()

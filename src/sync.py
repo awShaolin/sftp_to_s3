@@ -28,6 +28,9 @@ def get_old_sftp_meta(path):
 
 
 def compare_sftp_meta(new_sftp_meta, old_sftp_meta):
+    """
+    Compare meta of files in sftp and s3 and returns list of files to upload to s3
+    """
     files_to_upload = []
 
     for path, new_attrs in new_sftp_meta.items():
@@ -41,6 +44,9 @@ def compare_sftp_meta(new_sftp_meta, old_sftp_meta):
 
 
 def sftp_to_s3(s3, sftp, files_to_upload, local_dwnld_dir):
+    """
+    Load files from sftp to s3 frougth local dir
+    """
     if not files_to_upload:
         logging.info(">>> Nothing to upload, files_to_upload list is empty.")
         return 
@@ -51,6 +57,7 @@ def sftp_to_s3(s3, sftp, files_to_upload, local_dwnld_dir):
 
     for path in files_to_upload:
         local_file_path = os.path.join(local_dwnld_dir, os.path.basename(path))
+        logging.info(">>>>>>>>>>>")
         try:
             sftp.sftp_to_local(path, local_file_path)
         except:
@@ -67,6 +74,35 @@ def sftp_to_s3(s3, sftp, files_to_upload, local_dwnld_dir):
             logging.info(f">>> Deleted local file {local_file_path} after upload to S3")
         except Exception as e:
             logging.error(f">>> Failed to delete local file {local_file_path}: {e}")
+
+
+def sftp_to_s3_direct(s3, sftp, files_to_upload):
+    """
+    Directly upload files from SFTP to S3
+    """
+    if not files_to_upload:
+        logging.info(">>> Nothing to upload, files_to_upload list is empty.")
+        return 
+
+    for path in files_to_upload:
+        try:
+            with sftp.sftp.open(path, "rb") as sftp_file:
+                sftp_file.prefetch()
+                logging.info(">>>>>>>>>>>")
+                logging.info(f"{sftp_file}")
+
+                s3_path = path.replace('upload/', 'history/', 1)
+
+                s3.s3.put_object(
+                    Bucket=s3.bucket,
+                    Key=s3_path,
+                    Body=sftp_file
+                )
+                logging.info(f">>> Uploaded {path} to S3 as {s3_path}")
+        
+        except Exception as e:
+            logging.error(f">>> Failed to upload {path} to S3: {e}")
+            continue
 
 
 if __name__ == "__main__":
@@ -113,13 +149,11 @@ if __name__ == "__main__":
     )
 
     #load data from sftp to s3
-    sftp_to_s3(s3, sftp, files_to_upload, LOCAL_DWNLD_DIR)
+    sftp_to_s3_direct(s3, sftp, files_to_upload)
     logging.info(">>> Finish loading files from sftp to s3")
     
     sftp.close_conn()
     
-    clean_local_dwnld_dir(LOCAL_DWNLD_DIR)
-
     #remember new meta
     with open(PATH_TO_OLD_META, "w") as f:
         json.dump(new_sftp_meta, f)

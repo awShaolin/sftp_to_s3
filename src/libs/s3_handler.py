@@ -74,11 +74,11 @@ class S3Handler:
         Load data from local dir to s3
         """
         try: 
-            logging.info(f">>> Starting to upload {local_file_path} to S3 ...")
+            logging.info(f">>> (TO S3) Starting to upload {local_file_path} to S3 ...")
             self.s3.upload_file(local_file_path, self.bucket, s3_path)
-            logging.info(f">>> Uploaded {local_file_path} to S3 as {s3_path}")
+            logging.info(f">>> (TO S3) Uploaded {local_file_path} to S3 as {s3_path}")
         except Exception as e:
-            logging.error(f">>> Failed to upload {local_file_path} to S3: {e}")
+            logging.error(f">>> (TO S3) Failed to upload {local_file_path} to S3: {e}")
     
     def __getattr__(self, name):
         return getattr(self.s3, name)

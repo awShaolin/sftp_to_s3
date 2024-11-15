@@ -58,11 +58,11 @@ class SftpHandler:
             if not os.path.exists(os.path.dirname(local_path)):
                 os.makedirs(os.path.dirname(local_path))
             
-            logging.info(f">>> Starting download from {remote_path} to {local_path}")
+            logging.info(f">>> (TO LOCAL) Starting download from {remote_path} to {local_path}")
             self.sftp.get(remote_path, local_path)
-            logging.info(f">>> Downloaded {remote_path} to {local_path}")
+            logging.info(f">>> (TO LOCAL) Downloaded {remote_path} to {local_path}")
         except Exception as e:
-            logging.error(f">>> Failed to download {remote_path}: {e}")
+            logging.error(f">>> (TO LOCAL) Failed to download {remote_path}: {e}")
             raise
     
     def close_conn(self):
